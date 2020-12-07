@@ -20,6 +20,8 @@ import networkx as nx
 import matplotlib
 from operator import itemgetter
 import random
+
+from networkx.algorithms.simple_paths import all_simple_paths
 random.seed(9001)
 from random import randint
 import statistics
@@ -65,11 +67,33 @@ def get_arguments():
                         help="Output contigs in fasta file")
     return parser.parse_args()
 
+def fill(text, width=80):
+    """Split text with a line return to respect fasta format"""
+    return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
+
+def draw_graph(graph, graphimg_file):
+    """Draw the graph
+    """                                    
+    fig, ax = plt.subplots()
+    elarge = [(u, v) for (u, v, d) in graph.edges(data=True) if d['weight'] > 3]
+    #print(elarge)
+    esmall = [(u, v) for (u, v, d) in graph.edges(data=True) if d['weight'] <= 3]
+    #print(elarge)
+    # Draw the graph with networkx
+    #pos=nx.spring_layout(graph)
+    pos = nx.random_layout(graph)
+    nx.draw_networkx_nodes(graph, pos, node_size=6)
+    nx.draw_networkx_edges(graph, pos, edgelist=elarge, width=6)
+    nx.draw_networkx_edges(graph, pos, edgelist=esmall, width=6, alpha=0.5, 
+                           edge_color='b', style='dashed')
+    #nx.draw_networkx(graph, pos, node_size=10, with_labels=False)
+    # save image
+    plt.savefig(graphimg_file)
+
 def read_fastq(fastq_file):
     with open(fastq_file, 'rt') as f:
         for _ in f:
-            line = next(f)[:-1]
-            yield line
+            yield next(f)[:-1]
             next(f)
             next(f)
 
@@ -125,16 +149,37 @@ def solve_out_tips(graph, ending_nodes):
     pass
 
 def get_starting_nodes(graph):
-    pass
+    starting_nodes = []
+    for node in graph.nodes:
+        if len(list(graph.predecessors(node))) == 0:
+            starting_nodes.append(node)
+    return starting_nodes
 
 def get_sink_nodes(graph):
-    pass
+    ending_nodes = []
+    for node in graph.nodes:
+        if len(list(graph.successors(node))) == 0:
+            ending_nodes.append(node)
+    return ending_nodes
 
 def get_contigs(graph, starting_nodes, ending_nodes):
-    pass
+    contigs = []
+    for starting_node in starting_nodes:
+        for ending_node in ending_nodes:
+            paths = list(all_simple_paths(graph, starting_node, ending_node))
+            for path in paths:
+                contig = path[0]
+                for node in path[1:]:
+                    contig += node[-1]
+                contigs.append((contig, len(contig)))
+    return contigs
 
 def save_contigs(contigs_list, output_file):
-    pass
+    with open(output_file, 'wt') as f:
+        for i, contig_tuple in enumerate(contigs_list):
+            contig, length = contig_tuple
+            f.write(f'>contig_{i} len={length}\n')
+            f.write(fill(f'{contig}\n'))
 
 #==============================================================
 # Main program
@@ -144,11 +189,18 @@ def main():
     Main program function
     """
     # Get arguments
-    # args = get_arguments()
+    args = get_arguments()
     # lines = read_fastq(fastq_file=args.fastq_file)
-    # kmers = cut_kmer(read=next(lines), kmer_size=5)
-    # kmer_dict = build_kmer_dict(fastq_file=args.fastq_file, kmer_size=args.kmer_size)
-    # kmer_graph = build_graph(kmer_dict=kmer_dict)
+    # # for line in lines: print(line)
+    # kmers = cut_kmer(read=next(lines), kmer_size=args.kmer_size)
+    # # for kmer in kmers: print(kmer)
+    kmer_dict = build_kmer_dict(fastq_file=args.fastq_file, kmer_size=args.kmer_size)
+    kmer_graph = build_graph(kmer_dict=kmer_dict)
+    starting_nodes = get_starting_nodes(kmer_graph)
+    ending_nodes = get_sink_nodes(kmer_graph)
+    contigs_list = get_contigs(kmer_graph, starting_nodes, ending_nodes)
+    filename = args.fastq_file.split('/')[-1].split('.')[0]
+    # save_contigs(contigs_list=contigs_list, output_file=f'{filename}.fna')
 
 if __name__ == '__main__':
     main()
