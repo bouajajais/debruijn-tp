@@ -24,13 +24,15 @@ random.seed(9001)
 from random import randint
 import statistics
 
-__author__ = "Your Name"
+import matplotlib.pyplot as plt
+
+__author__ = "Ismail Bouajaja"
 __copyright__ = "Universite Paris Diderot"
-__credits__ = ["Your Name"]
+__credits__ = ["Ismail Bouajaja"]
 __license__ = "GPL"
 __version__ = "1.0.0"
-__maintainer__ = "Your Name"
-__email__ = "your@email.fr"
+__maintainer__ = "Ismail Bouajaja"
+__email__ = "bouajajais@eisti.fr"
 __status__ = "Developpement"
 
 def isfile(path):
@@ -45,7 +47,6 @@ def isfile(path):
             msg = "{0} does not exist.".format(path)
         raise argparse.ArgumentTypeError(msg)
     return path
-
 
 def get_arguments():
     """Retrieves the arguments of the program.
@@ -64,29 +65,45 @@ def get_arguments():
                         help="Output contigs in fasta file")
     return parser.parse_args()
 
-
 def read_fastq(fastq_file):
-    pass
-
+    with open(fastq_file, 'rt') as f:
+        for _ in f:
+            line = next(f)[:-1]
+            yield line
+            next(f)
+            next(f)
 
 def cut_kmer(read, kmer_size):
-    pass
-
+    return (read[index:index+kmer_size] for index in range(len(read) - kmer_size + 1))
+    # index = 0
+    # while index + kmer_size <= len(read):
+    #     yield read[index:index+kmer_size]
+    #     index += 1
 
 def build_kmer_dict(fastq_file, kmer_size):
-    pass
-
+    reads = read_fastq(fastq_file=fastq_file)
+    kmer_dict = {}
+    for read in reads:
+        kmers = cut_kmer(read=read, kmer_size=kmer_size)
+        for kmer in kmers:
+            if kmer not in kmer_dict.keys():
+                kmer_dict[kmer] = 1
+            else:
+                kmer_dict[kmer] += 1
+    return kmer_dict
 
 def build_graph(kmer_dict):
-    pass
-
+    kmer_graph = nx.DiGraph()
+    for kmer, weight in kmer_dict.items():
+        kmer_size = len(kmer)
+        kmer_graph.add_edge(kmer[:kmer_size-1], kmer[1:], weight=weight)
+    return kmer_graph
 
 def remove_paths(graph, path_list, delete_entry_node, delete_sink_node):
     pass
 
 def std(data):
     pass
-
 
 def select_best_path(graph, path_list, path_length, weight_avg_list, 
                      delete_entry_node=False, delete_sink_node=False):
@@ -127,7 +144,11 @@ def main():
     Main program function
     """
     # Get arguments
-    args = get_arguments()
+    # args = get_arguments()
+    # lines = read_fastq(fastq_file=args.fastq_file)
+    # kmers = cut_kmer(read=next(lines), kmer_size=5)
+    # kmer_dict = build_kmer_dict(fastq_file=args.fastq_file, kmer_size=args.kmer_size)
+    # kmer_graph = build_graph(kmer_dict=kmer_dict)
 
 if __name__ == '__main__':
     main()
