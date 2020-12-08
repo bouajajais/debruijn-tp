@@ -28,7 +28,7 @@ from random import randint
 import statistics
 
 import matplotlib.pyplot as plt
-from networkx.algorithms.lowest_common_ancestors import all_pairs_lowest_common_ancestor
+from networkx.algorithms.lowest_common_ancestors import lowest_common_ancestor
 
 __author__ = "Ismail Bouajaja"
 __copyright__ = "Universite Paris Diderot"
@@ -163,7 +163,9 @@ def select_best_path(graph, path_list, path_length, weight_avg_list,
     best_path = best_paths[rand_index]
     # remove the best path from path_list then use remove_paths
     path_list.remove(best_path)
-    return remove_paths(graph, path_list, delete_entry_node, delete_sink_node)
+    new_graph = remove_paths(graph, path_list, delete_entry_node, delete_sink_node)
+    new_graph.add_edges_from([(n1, n2, graph[n1][n2]) for (n1, n2) in zip(best_path[:-1], best_path[1:])])
+    return new_graph
 
 def path_average_weight(graph, path):
     '''computes the mean of all the weights of the edges of a path'''
