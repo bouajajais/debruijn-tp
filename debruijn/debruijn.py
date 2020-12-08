@@ -22,11 +22,13 @@ from operator import itemgetter
 import random
 
 from networkx.algorithms.simple_paths import all_simple_paths
+from numpy.lib.function_base import select
 random.seed(9001)
 from random import randint
 import statistics
 
 import matplotlib.pyplot as plt
+from networkx.algorithms.lowest_common_ancestors import all_pairs_lowest_common_ancestor
 
 __author__ = "Ismail Bouajaja"
 __copyright__ = "Universite Paris Diderot"
@@ -91,6 +93,7 @@ def draw_graph(graph, graphimg_file):
     plt.savefig(graphimg_file)
 
 def read_fastq(fastq_file):
+    '''returns a generator that yields lines containing a sequence'''
     with open(fastq_file, 'rt') as f:
         for _ in f:
             yield next(f)[:-1]
@@ -98,6 +101,7 @@ def read_fastq(fastq_file):
             next(f)
 
 def cut_kmer(read, kmer_size):
+    '''returns a generator that yields kmer of a sequence one by one'''
     return (read[index:index+kmer_size] for index in range(len(read) - kmer_size + 1))
     # index = 0
     # while index + kmer_size <= len(read):
@@ -105,6 +109,7 @@ def cut_kmer(read, kmer_size):
     #     index += 1
 
 def build_kmer_dict(fastq_file, kmer_size):
+    '''returns a dictionary which keys are the kmer and values are their frequencies in all the sequences'''
     reads = read_fastq(fastq_file=fastq_file)
     kmer_dict = {}
     for read in reads:
@@ -117,6 +122,7 @@ def build_kmer_dict(fastq_file, kmer_size):
     return kmer_dict
 
 def build_graph(kmer_dict):
+    '''returns graph which edges are kmer weighted with their frequencies'''
     kmer_graph = nx.DiGraph()
     for kmer, weight in kmer_dict.items():
         kmer_size = len(kmer)
@@ -124,23 +130,84 @@ def build_graph(kmer_dict):
     return kmer_graph
 
 def remove_paths(graph, path_list, delete_entry_node, delete_sink_node):
-    pass
+    '''
+    removes all the nodes present in 'path_list' from 'graph'
+    except entring nodes or ending nodes if their booleans are False
+    Note : a node is an entring node if it's the first node of the path
+    '''
+    new_graph = nx.DiGraph(graph)
+    for path in path_list:
+        i_start = 0 if delete_entry_node else 1
+        i_end = len(path) if delete_sink_node else -1
+        new_graph.remove_nodes_from(path[i_start:i_end])
+    return new_graph
 
 def std(data):
-    pass
+    return statistics.stdev(data)
 
 def select_best_path(graph, path_list, path_length, weight_avg_list, 
                      delete_entry_node=False, delete_sink_node=False):
-    pass
+    '''
+    find the best path in path_list and remove all the other ones from the graph
+    '''
+    # search for best path
+    # keep heaviest paths
+    max_weight = max(weight_avg_list)
+    best_paths = [path_list[i] for i in range(len(path_list)) if weight_avg_list[i] == max_weight]
+    path_length = [path_length[i] for i in range(len(path_length)) if weight_avg_list[i] == max_weight]
+    # keep longest paths
+    max_length = max(path_length)
+    best_paths = [best_paths[i] for i in range(len(best_paths)) if path_length[i] == max_length]
+    # keep random path
+    rand_index = randint(0, len(best_paths) - 1)
+    best_path = best_paths[rand_index]
+    # remove the best path from path_list then use remove_paths
+    path_list.remove(best_path)
+    return remove_paths(graph, path_list, delete_entry_node, delete_sink_node)
 
 def path_average_weight(graph, path):
-    pass
+    '''computes the mean of all the weights of the edges of a path'''
+    mean = 0
+    for node1, node2 in zip(path[:-1], path[1:]):
+        mean += graph[node1][node2]['weight']
+    return mean / (len(path) - 1)
 
 def solve_bubble(graph, ancestor_node, descendant_node):
-    pass
+    '''find the best path between two nodes and remove the remaining'''
+    path_list = list(all_simple_paths(graph, ancestor_node, descendant_node))
+    path_length = [len(path) for path in path_list]
+    weight_avg_list = [path_average_weight(graph, path) for path in path_list]
+    return select_best_path(graph, path_list, path_length, weight_avg_list)
 
 def simplify_bubbles(graph):
-    pass
+    '''
+    iterate over all pairs of nodes until a bubble is found
+    remove the bubble
+    repeat over the new graph until all pairs of nodes have already been tested
+    '''
+    new_graph = nx.DiGraph(graph)
+    done_pairs = []
+    while True:
+        nodes = list(new_graph.nodes)
+        n_nodes = len(nodes)
+        if n_nodes <= 2: return new_graph
+        i1, i2 = 0, 1
+        while True:
+            node1, node2 = nodes[i1], nodes[i2]
+            if (node1, node2) not in done_pairs and len(list(all_simple_paths(new_graph, node1, node2))) > 1:
+                new_graph = solve_bubble(new_graph, node1, node2)
+                done_pairs.append((node1, node2))
+                break
+            if i2 == n_nodes - 1:
+                if i1 == n_nodes - 2:
+                    break
+                i1 += 1
+                i2 = i1 + 1
+            else:
+                i2 += 1
+        if i1 == n_nodes - 2 and i2 == n_nodes - 1:
+            break
+    return new_graph
 
 def solve_entry_tips(graph, starting_nodes):
     pass
@@ -149,6 +216,7 @@ def solve_out_tips(graph, ending_nodes):
     pass
 
 def get_starting_nodes(graph):
+    '''returns nodes that don't have predecessors'''
     starting_nodes = []
     for node in graph.nodes:
         if len(list(graph.predecessors(node))) == 0:
@@ -156,6 +224,7 @@ def get_starting_nodes(graph):
     return starting_nodes
 
 def get_sink_nodes(graph):
+    '''returns nodes that don't have successors'''
     ending_nodes = []
     for node in graph.nodes:
         if len(list(graph.successors(node))) == 0:
@@ -163,6 +232,7 @@ def get_sink_nodes(graph):
     return ending_nodes
 
 def get_contigs(graph, starting_nodes, ending_nodes):
+    '''returns a list of tuples containing each contig and its length'''
     contigs = []
     for starting_node in starting_nodes:
         for ending_node in ending_nodes:
@@ -175,6 +245,7 @@ def get_contigs(graph, starting_nodes, ending_nodes):
     return contigs
 
 def save_contigs(contigs_list, output_file):
+    '''saves the contigs into a file'''
     with open(output_file, 'wt') as f:
         for i, contig_tuple in enumerate(contigs_list):
             contig, length = contig_tuple
@@ -198,6 +269,8 @@ def main():
     kmer_graph = build_graph(kmer_dict=kmer_dict)
     starting_nodes = get_starting_nodes(kmer_graph)
     ending_nodes = get_sink_nodes(kmer_graph)
+    print(starting_nodes)
+    print(ending_nodes)
     contigs_list = get_contigs(kmer_graph, starting_nodes, ending_nodes)
     filename = args.fastq_file.split('/')[-1].split('.')[0]
     # save_contigs(contigs_list=contigs_list, output_file=f'{filename}.fna')
