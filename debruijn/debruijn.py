@@ -182,40 +182,95 @@ def solve_bubble(graph, ancestor_node, descendant_node):
     return select_best_path(graph, path_list, path_length, weight_avg_list)
 
 def simplify_bubbles(graph):
-    '''
-    iterate over all pairs of nodes until a bubble is found
-    remove the bubble
-    repeat over the new graph until all pairs of nodes have already been tested
-    '''
+    '''removes all bubbles from the graph'''
     new_graph = nx.DiGraph(graph)
-    done_pairs = []
     while True:
+        # each time we change the graph
+        # we start a new iteration with the new list of nodes
         nodes = list(new_graph.nodes)
-        n_nodes = len(nodes)
-        if n_nodes <= 2: return new_graph
-        i1, i2 = 0, 1
-        while True:
-            node1, node2 = nodes[i1], nodes[i2]
-            if (node1, node2) not in done_pairs and len(list(all_simple_paths(new_graph, node1, node2))) > 1:
-                new_graph = solve_bubble(new_graph, node1, node2)
-                done_pairs.append((node1, node2))
-                break
-            if i2 == n_nodes - 1:
-                if i1 == n_nodes - 2:
+        seen = []
+        for node in nodes:
+            predecessors = list(new_graph.predecessors(node))
+            len_predecessors = len(predecessors)
+            if len_predecessors > 1:
+                # we need to find two predecessors with a common ancestor
+                # 0 <= i0 <= len_predecessors - 2
+                # i0 + 1 <= i1 <= len_predecessors - 1
+                i0 = 0
+                i1 = 1
+                ancestor = lowest_common_ancestor(new_graph, predecessors[i0], predecessors[i1])
+                while ancestor is None:
+                    if i1 == len_predecessors - 1:
+                        if i0 == len_predecessors - 2:
+                            # no predecessors with common ancestor
+                            break
+                        i0 += 1
+                        i1 = i0 + 1
+                    else:
+                        i1 += 1
+                    ancestor = lowest_common_ancestor(new_graph, predecessors[i0], predecessors[i1])
+                if ancestor is not None:
+                    # ancestor exists
+                    # modify the graph
+                    # break to start over again with the new_graph
+                    new_graph = solve_bubble(new_graph, ancestor, node)
                     break
-                i1 += 1
-                i2 = i1 + 1
-            else:
-                i2 += 1
-        if i1 == n_nodes - 2 and i2 == n_nodes - 1:
+            seen.append(node)
+        # we break out of the loop if no node is an ending node of a bubble
+        # in other words, our graph is ready
+        if len(seen) == len(nodes):
             break
     return new_graph
 
 def solve_entry_tips(graph, starting_nodes):
-    pass
+    '''removes unwanted entry tips'''
+    new_graph = nx.DiGraph(graph)
+    new_starting_nodes = starting_nodes
+    while True:
+        # each time we change the graph
+        # we start a new iteration with the new list of nodes and starting_nodes
+        nodes = list(new_graph.nodes)
+        new_starting_nodes = [starting_node for starting_node in new_starting_nodes if starting_node in nodes]
+        done = True
+        for node in nodes:
+            if len(list(new_graph.predecessors(node))) >= 2:
+                path_list = []
+                for starting_node in new_starting_nodes:
+                    path_list.extend(all_simple_paths(new_graph, starting_node, node))
+                path_length = [len(path) for path in path_list]
+                weight_avg_list = [path_average_weight(graph, path) for path in path_list]
+                new_graph = select_best_path(new_graph, path_list, path_length, weight_avg_list, delete_entry_node=True)
+                done = False
+                break
+        if done:
+            # done remains True if no node has more than 2 predecessors
+            break
+    return new_graph
 
 def solve_out_tips(graph, ending_nodes):
-    pass
+    '''removes unwanted out tips'''
+    new_graph = nx.DiGraph(graph)
+    new_ending_nodes = ending_nodes
+    while True:
+        # each time we change the graph
+        # we start a new iteration with the new list of nodes and ending_nodes
+        nodes = list(new_graph.nodes)
+        new_ending_nodes = [ending_node for ending_node in new_ending_nodes if ending_node in nodes]
+        done = True
+        for node in nodes:
+            if len(list(new_graph.successors(node))) >= 2:
+                path_list = []
+                for ending_node in new_ending_nodes:
+                    path_list.extend(all_simple_paths(new_graph, node, ending_node))
+                path_length = [len(path) for path in path_list]
+                weight_avg_list = [path_average_weight(graph, path) for path in path_list]
+                new_graph = select_best_path(new_graph, path_list, path_length, weight_avg_list, delete_sink_node=True)
+                done = False
+                break
+        if done:
+            # done remains True if no node has more than 2 successors
+            break
+    return new_graph
 
 def get_starting_nodes(graph):
     '''returns nodes that don't have predecessors'''
